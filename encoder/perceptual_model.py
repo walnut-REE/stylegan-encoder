@@ -19,11 +19,31 @@ def load_images(images_list, image_size=256):
     loaded_images = np.vstack(loaded_images)
     return loaded_images
 
+def load_images_with_weight(images_list, image_size=256):
+    # load image weights
+    loaded_images = list()
+    for img_path in images_list:
+      img = PIL.Image.open(img_path).convert('RGB').resize(
+          (image_size, image_size), PIL.Image.LANCZOS)
+      weight_img_path = os.path.basename(img_path).split('_')
+      img = np.array(img)
+      img = np.expand_dims(img, 0)
+      loaded_images.append(img)
+    loaded_images = np.vstack(loaded_images)
+    return loaded_images
+
 def tf_custom_l1_loss(img1,img2):
   return tf.math.reduce_mean(tf.math.abs(img2-img1), axis=None)
 
+def tf_weighted_l1_loss(ref_img, generated_img, weights):
+  return tf.math.reduce_mean(tf.math.abs(generated_img - ref_img) * weights)
+
 def tf_custom_logcosh_loss(img1,img2):
   return tf.math.reduce_mean(tf.keras.losses.logcosh(img1,img2))
+
+def tf_weighted_logcosh_loss(ref_img, generated_img, weights):
+  return tf.math.reduce_mean(
+    tf.keras.losses.logcosh(ref_img, generated_img) * weights)
 
 def unpack_bz2(src_path):
     data = bz2.BZ2File(src_path).read()
