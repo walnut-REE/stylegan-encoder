@@ -347,6 +347,7 @@ def open_url(url: str, cache_dir: str = None, num_attempts: int = 10, verbose: b
     if not is_url(url) and os.path.isfile(url):
         return open(url, 'rb')
 
+    
     assert is_url(url)
     assert num_attempts >= 1
 

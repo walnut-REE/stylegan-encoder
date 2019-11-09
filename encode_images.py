@@ -9,7 +9,8 @@ import dnnlib.tflib as tflib
 import config
 from encoder.generator_model import Generator
 from encoder.perceptual_model import PerceptualModel, load_images
-from keras.models import load_model
+from tensorflow.keras.models import load_model
+
 
 def split_to_batches(l, n):
     for i in range(0, len(l), n):
@@ -35,7 +36,7 @@ def main():
     parser.add_argument('--resnet_image_size', default=256, help='Size of images for the Resnet model', type=int)
     parser.add_argument('--lr', default=0.02, help='Learning rate for perceptual model', type=float)
     parser.add_argument('--decay_rate', default=0.9, help='Decay rate for learning rate', type=float)
-    parser.add_argument('--iterations', default=100, help='Number of optimization steps for each batch', type=int)
+    parser.add_argument('--iterations', default=200, help='Number of optimization steps for each batch', type=int)
     parser.add_argument('--decay_steps', default=10, help='Decay steps for learning rate decay (as a percent of iterations)', type=float)
     parser.add_argument('--load_effnet', default='data/finetuned_effnet.h5', help='Model to load for EfficientNet approximation of dlatents')
     parser.add_argument('--load_resnet', default='data/finetuned_resnet.h5', help='Model to load for ResNet approximation of dlatents')
@@ -47,11 +48,15 @@ def main():
     parser.add_argument('--use_mssim_loss', default=100, help='Use MS-SIM perceptual loss; 0 to disable, > 0 to scale.', type=float)
     parser.add_argument('--use_lpips_loss', default=100, help='Use LPIPS perceptual loss; 0 to disable, > 0 to scale.', type=float)
     parser.add_argument('--use_l1_penalty', default=1, help='Use L1 penalty on latents; 0 to disable, > 0 to scale.', type=float)
+    parser.add_argument('--use_tex_loss', default=3.0, help='Use texture space loss.', type=float)
 
     # Generator params
     parser.add_argument('--randomize_noise', default=False, help='Add noise to dlatents during optimization', type=bool)
     parser.add_argument('--tile_dlatents', default=False, help='Tile dlatents to use a single vector at each scale', type=bool)
     parser.add_argument('--clipping_threshold', default=2.0, help='Stochastic clipping of gradient values outside of this threshold', type=float)
+
+    # Face Alignment Model
+    parser.add_argument('--crop_face', default=False, help='Crop face image use face alignment model', type=bool)
 
     # Masking params
     parser.add_argument('--load_mask', default=False, help='Load segmentation masks', type=bool)
@@ -90,6 +95,7 @@ def main():
     # Initialize generator and perceptual model
     tflib.init_tf()
     with dnnlib.util.open_url(args.model_url, cache_dir=config.cache_dir) as f:
+        print('Load model from %s'%(args.model_url))
         generator_network, discriminator_network, Gs_network = pickle.load(f)
 
     generator = Generator(Gs_network, args.batch_size, clipping_threshold=args.clipping_threshold, tiled_dlatent=args.tile_dlatents, model_res=args.model_res, randomize_noise=args.randomize_noise)
@@ -108,15 +114,18 @@ def main():
 
     ff_model = None
 
+    cur_batch_id = 0
+
     # Optimize (only) dlatents by minimizing perceptual loss between reference and generated images in feature space
     for images_batch in tqdm(split_to_batches(ref_images, args.batch_size), total=len(ref_images)//args.batch_size):
+        cur_batch_id += 1
         names = [os.path.splitext(os.path.basename(x))[0] for x in images_batch]
         if args.output_video:
           video_out = {}
           for name in names:
             video_out[name] = cv2.VideoWriter(os.path.join(args.video_dir, f'{name}.avi'),cv2.VideoWriter_fourcc(*args.video_codec), args.video_frame_rate, (args.video_size,args.video_size))
 
-        perceptual_model.set_reference_images(images_batch)
+        perceptual_model.set_reference_images(images_batch, cur_batch_id)
         dlatents = None
         if (args.load_last != ''): # load previous dlatents for initialization
             for name in names:

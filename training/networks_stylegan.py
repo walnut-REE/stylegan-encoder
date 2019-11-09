@@ -504,6 +504,7 @@ def G_mapping(
             x = act(x)
 
     # Broadcast.
+    print('> logging dlatent_broadcast = ', dlatent_broadcast)
     if dlatent_broadcast is not None:
         with tf.variable_scope('Broadcast'):
             x = tf.tile(x[:, np.newaxis], [1, dlatent_broadcast, 1])
